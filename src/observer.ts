@@ -13,31 +13,50 @@ interface NodeOptAction extends Action {
   removeNodes?: NodeList; // remove action
 }
 
+const importNode = document.importNode.bind(document);
+
+const getEle = <E extends Element = Element>(t: Element | string): E => {
+  let target;
+  if (typeof t === "string") {
+    target = document.querySelector<E>(t)!;
+    if (!target) {
+      throw new Error(
+        `Can't find element with selector ${t}. Are you sure it exists?`
+      );
+    }
+  } else {
+    target = t;
+  }
+
+  return target as E;
+};
+
 export class Monitor {
   private observer: MutationObserver;
   private actions: Action[] = [];
+  private storeFragment: DocumentFragment;
+  private replayFrame: HTMLIFrameElement;
   //   private nodeIdMap = new WeakMap<Node, number>(); // save node->id
   //   private id = 0;
 
-  constructor() {
+  constructor(frame: HTMLIFrameElement | string) {
     this.observer = new MutationObserver(this.mutationCallback);
+    this.storeFragment = document.createDocumentFragment();
+    this.replayFrame = getEle<HTMLIFrameElement>(frame);
   }
 
   start(
     t: Element | string = document.documentElement,
     opts?: MutationObserverInit
   ) {
-    let target;
-    if (typeof t === "string") {
-      target = document.querySelector(t)!;
-      if (!target) {
-        throw new Error(
-          `Can't find element with selector ${t}. Are you sure it exists?`
-        );
-      }
-    } else {
-      target = t;
-    }
+    const target = getEle(t);
+    // store target element
+    this.storeFragment.append(importNode(target, true));
+    console.log(this.replayFrame);
+
+    this.replayFrame.contentDocument!.documentElement.append(
+      this.storeFragment
+    );
 
     const options = {
       subtree: true,
@@ -78,9 +97,13 @@ export class Monitor {
     }
   }
 
+  /**
+   *
+   * @param frame the frame to replay
+   *  1. init the frame with the origin document(w/o any actions)
+   *  2. replay the actions
+   */
   replay(frame: HTMLIFrameElement | string) {
-      console.log('action',this.actions);
-      
     let iframe;
     if (typeof frame === "string") {
       iframe = document.querySelector<HTMLIFrameElement>(frame);
@@ -95,19 +118,20 @@ export class Monitor {
 
     const frameDoc = iframe?.contentDocument!.documentElement;
     const actions = this.actions;
-    const fragment = document.createDocumentFragment();
-    debugger
+    frameDoc?.appendChild(this.storeFragment);
+
     for (const act of actions) {
-      this.handleAction(act, fragment);
+      this.handleAction(act);
     }
-    console.log(`fragment`, fragment)
-    frameDoc?.append(fragment)
+    setTimeout(() => {
+      frameDoc?.appendChild(this.storeFragment);
+    }, 3000);
   }
 
-  handleAction(act: Action, fragment: DocumentFragment) {
+  handleAction(act: Action) {
     switch (act.type) {
       case ActionType.ADD_NODES:
-        this.performAddNode(act as NodeOptAction,fragment);
+        this.performAddNode(act as NodeOptAction);
         break;
 
       default:
@@ -115,8 +139,10 @@ export class Monitor {
     }
   }
 
-  performAddNode(act:NodeOptAction,fragment: DocumentFragment){
-      fragment.append(act.parent)
+  performAddNode(act: NodeOptAction) {
+    // TODO: record the parent tag id or name to accurate get the parent element
+    // then do DOM operation
+    this.storeFragment.append(importNode(act.parent, true));
   }
 }
 
