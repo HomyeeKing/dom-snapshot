@@ -8,9 +8,11 @@ span.textContent = "I'm span";
 const btn = document.querySelector(".btn");
 
 const replay = document.querySelector(".replay");
-
+app.append(span)
 btn?.addEventListener("click", () => {
-  app?.append(span);
+  app?.insertBefore(span,app.firstChild);
+  console.log(span.nextSibling);
+  
 });
 replay?.addEventListener("click", () => {
   monitor.replay("#iframe");
